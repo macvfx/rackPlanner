@@ -1,0 +1,65 @@
+name: RackPlanner
+options:
+  bundleIdPrefix: ca.macvfx
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: 5.9
+    MACOSX_DEPLOYMENT_TARGET: 15.0
+    DEVELOPMENT_TEAM: ""
+targets:
+  RackPlanner:
+    type: application
+    platform: macOS
+    sources:
+      - path: RackPlanner
+    info:
+      path: RackPlanner/Info.plist
+      properties:
+        CFBundleDisplayName: Rack Planner
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: 1
+        NSHumanReadableCopyright: Copyright © 2026 Rack Planner contributors
+        LSApplicationCategoryType: public.app-category.utilities
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Rack Planner Project
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes:
+              - ca.macvfx.rackplanner.project
+            CFBundleTypeExtensions:
+              - rackplan
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: ca.macvfx.rackplanner.project
+            UTTypeDescription: Rack Planner Project
+            UTTypeConformsTo:
+              - public.json
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - rackplan
+              public.mime-type:
+                - application/x-rackplan+json
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ca.macvfx.RackPlanner
+        PRODUCT_NAME: Rack Planner
+        PRODUCT_MODULE_NAME: RackPlanner
+        CODE_SIGN_STYLE: Automatic
+    scheme:
+      testTargets:
+        - RackPlannerTests
+  RackPlannerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: RackPlannerTests
+    dependencies:
+      - target: RackPlanner
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ca.macvfx.RackPlannerTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Rack Planner.app/Contents/MacOS/Rack Planner"
+        BUNDLE_LOADER: "$(TEST_HOST)"
