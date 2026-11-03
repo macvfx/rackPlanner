@@ -50,7 +50,7 @@ struct AboutRackPlannerView: View {
             Link("code.matx.ca", destination: RackPlannerLinks.website)
                 .font(.callout)
 
-            Text("Copyright © 2026 Rack Planner contributors")
+            Text("Copyright © 2026 Mat X")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

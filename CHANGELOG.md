@@ -29,3 +29,4 @@
   and CSV contents.
 - `ca.macvfx.RackPlanner` application and document-type identifiers.
 - Regression tests for public support links.
+- MIT License and consistent copyright metadata.

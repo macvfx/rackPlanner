@@ -76,3 +76,7 @@ sensitive and review them before sharing.
 - [Source and issue tracker](https://github.com/macvfx/rackPlanner)
 
 All sample names and values are fictional.
+
+## License
+
+Rack Planner is available under the [MIT License](LICENSE).

@@ -21,7 +21,7 @@ targets:
         CFBundleDisplayName: Rack Planner
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: 1
-        NSHumanReadableCopyright: Copyright © 2026 Rack Planner contributors
+        NSHumanReadableCopyright: Copyright © 2026 Mat X
         LSApplicationCategoryType: public.app-category.utilities
         CFBundleDocumentTypes:
           - CFBundleTypeName: Rack Planner Project
