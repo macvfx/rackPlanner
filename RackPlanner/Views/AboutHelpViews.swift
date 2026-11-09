@@ -131,10 +131,10 @@ struct RackPlannerHelpView: View {
     private var quickStart: some View {
         Group {
             HelpSection(title: "1. Add equipment", icon: "shippingbox") {
-                Text("Add a preset from the Device Library. Drag it to a shelf, or add it to Unassigned and place it later.")
+                Text("Add a preset from the Device Library. Drag it to a shelf, or add it to Unassigned and place it later. Each category ends with a Generic block for equipment without a named preset — add it, then rename it and edit its ports.")
             }
             HelpSection(title: "2. Arrange shelves", icon: "rectangle.stack") {
-                Text("A shelf accepts one dedicated device plus shared accessories. Select a device to edit its name, model, ports, power estimate, and notes.")
+                Text("A shelf accepts one primary device plus shared accessories (cards marked \"shared\"). Change this under Shelf use in the inspector. Drag a primary device onto another occupied shelf to swap the two shelves; its shared accessories travel with it. Drop it in the thin gap between two shelves to insert it there instead; neighbouring shelves slide over. Drag an accessory on its own to move just that accessory. Right-click a card to show it in the inspector, duplicate it (the copy lands on the nearest empty shelf, or in Unassigned), or delete it. Select a device to edit its name, model, ports, power estimate, and notes.")
             }
             HelpSection(title: "3. Review the plan", icon: "checklist") {
                 Text("Overview summarizes devices, occupied shelves, network shortages, UPS outlets, and entered watts.")
@@ -151,7 +151,7 @@ struct RackPlannerHelpView: View {
                 Text("KVMs, adapters, docks, drives, and small hubs can share the host's shelf. The shelf is occupied once, while each physical connection remains visible.")
             }
             HelpSection(title: "Quick access", icon: "network") {
-                Text("Store a hostname plus LAN, VPN/Tailscale, or other addresses. HTTP, HTTPS, Screen Sharing/VNC, and SSH entries become clickable links. Rack Planner does not test reachability or authenticate.")
+                Text("Store a hostname plus LAN, VPN/Tailscale, or other addresses. HTTP, HTTPS, Screen Sharing/VNC, and SSH entries become clickable links; other schemes are ignored. Rack Planner does not test reachability or authenticate.")
             }
         }
     }
@@ -159,13 +159,13 @@ struct RackPlannerHelpView: View {
     private var planning: some View {
         Group {
             HelpSection(title: "Network capacity", icon: "point.3.connected.trianglepath.dotted") {
-                Text("LAN and Production LAN demand are calculated separately. Rack Planner deducts inferred inter-switch uplinks, applies the spare-port target, and reports shortages.")
+                Text("LAN and Production LAN demand are calculated separately. Rack Planner deducts inferred inter-switch uplinks, applies the spare-port target, checks that enough ports reach each endpoint speed, and reports shortages.")
             }
             HelpSection(title: "Verify the recommendation", icon: "exclamationmark.triangle") {
                 Text("Confirm real switch negotiation speeds, media, VLAN, routing, and uplink design before purchasing. Recommendations are planning guidance.")
             }
             HelpSection(title: "CSV export", icon: "tablecells") {
-                Text("Export device, port, connection, quick-access, network-requirement, and power CSV files for review outside the app.")
+                Text("Export device, port, connection, quick-access, network-requirement, and power CSV files for review outside the app. Existing files are replaced only after you confirm.")
             }
         }
     }

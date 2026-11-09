@@ -12,7 +12,7 @@ or office equipment installation and answering practical capacity questions:
 
 ## Current status
 
-This repository contains an early functional MVP. It supports document-based
+This repository contains an early functional MVP (0.2.0). It supports document-based
 projects, a reusable device library, shared-shelf accessory placement, explicit
 USB/Thunderbolt/HDMI host connections, editable model identifiers and ports, a
 network-oriented inventory view, clickable hostname/LAN/VPN access links,

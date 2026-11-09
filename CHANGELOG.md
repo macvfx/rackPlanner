@@ -1,6 +1,58 @@
 # Changelog
 
-## 0.1.0 — Unreleased
+## 0.2.0 (build 8) — Unreleased
+
+Builds on the 0.1.0 MVP, which was never released; its notes follow under Added.
+
+### Changed
+
+- Rack view: right-click a card for Show in Inspector, Duplicate, and Delete…. Duplicates
+  get new identifiers, a " copy" name, and no hostname, addresses, or host connections.
+
+- "Dedicated" is now called **primary** in the app, and the Shelf use picker reads
+  "Primary — owns its shelf" / "Shared — rides on a primary device's shelf". Rack cards
+  now show only "shared" where it applies instead of tagging every card. Saved files and
+  CSV values are unchanged.
+
+- Rack view cards list ports by type (for example "5 network · 2 Thunderbolt · 1 HDMI")
+  instead of one total. Wi-Fi radios and power inlets (AC, and the USB-C power input on
+  the Raspberry Pi and Generic KVM) are no longer counted. Cause: the card used
+  `ports.count`, which counted every entry in the port list, so a router's Wi-Fi radio and
+  AC inlet inflated its "ports".
+
+- Rack view: drop a device in the gap between two shelves to insert it there; neighbouring
+  shelves slide to the nearest empty shelf instead of swapping.
+
+- Rack view: drag a dedicated device onto an occupied shelf to swap the two shelves
+  (shared accessories travel with their host, also across racks). Previously a drop
+  on an occupied shelf was refused.
+
+- The JetKVM preset is now **Generic KVM**; rename the device (or set its model
+  line) to JetKVM or any other KVM when adding it.
+- Every category now has a generic block (computer, network device, switch,
+  storage, adapter/dock, IoT, power, peripheral, KVM) for equipment with no named
+  preset.
+- Capacity checks are speed-aware: endpoints that need 10 Gb are counted against
+  ports that actually reach 10 Gb, not against every port. Cause: the engine
+  compared only the fastest endpoint with the fastest port, so a switch with one
+  10 Gb port looked adequate for several 10 Gb machines.
+
+### Fixed
+
+- Rack view card detail text wraps to a second line instead of being cut off
+  (a long port summary ended in "1 HD"). Cause: the line was limited to one line
+  at a fixed card width.
+
+- Quick-access links only open http, https, vnc, and ssh. Cause: any URL with a
+  scheme was passed through, so a shared plan could hold a `file:` or other
+  app-scheme link.
+- Plans saved by a newer schema are refused instead of being opened and re-saved
+  without the newer data; plans missing optional top-level keys now open.
+- Removing a port or device now removes host connections that used it, and
+  placement in a removed rack is cleared. Cause: references were cleaned only for
+  deleted devices, leaving blank cells in the connections CSV.
+- CSV cells beginning with `=`, `+`, `-`, or `@` are prefixed so Excel and Numbers
+  do not run them as formulas; export now asks before replacing existing CSVs.
 
 ### Added
 

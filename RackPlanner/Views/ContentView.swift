@@ -57,6 +57,11 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 280, ideal: 330, max: 420)
         }
         .frame(minWidth: 1120, minHeight: 700)
+        .onChange(of: document.project.devices) {
+            var cleaned = document.project
+            cleaned.pruneDanglingReferences()
+            if cleaned.devices != document.project.devices { document.project.devices = cleaned.devices }
+        }
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -98,12 +103,7 @@ struct ContentView: View {
                 allDevices: document.project.devices,
                 occupiedDedicatedShelves: occupiedDedicatedShelves(excluding: selectedDeviceID),
                 delete: {
-                    for deviceIndex in document.project.devices.indices {
-                        document.project.devices[deviceIndex].hostConnections.removeAll {
-                            $0.hostDeviceID == selectedDeviceID
-                        }
-                    }
-                    document.project.devices.removeAll { $0.id == selectedDeviceID }
+                    document.project.removeDevice(selectedDeviceID)
                     self.selectedDeviceID = nil
                 }
             )
@@ -140,6 +140,17 @@ struct ContentView: View {
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let directory = panel.url else { return }
+        let existing = CSVExporter.fileNames.filter {
+            FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path)
+        }
+        if !existing.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = "Replace existing CSV files?"
+            alert.informativeText = "This folder already contains: \(existing.joined(separator: ", ")). Exporting will replace them."
+            alert.addButton(withTitle: "Replace")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
         do {
             try CSVExporter.export(project: document.project, to: directory)
             statusMessage = "Exported devices, ports, quick access, host connections, network requirements, and power CSVs."
@@ -194,6 +205,19 @@ struct DeviceLibraryView: View {
 struct RackLayoutView: View {
     @Binding var project: RackPlanProject
     @Binding var selectedDeviceID: UUID?
+    @State private var pendingDelete: PlannedDevice?
+
+    /// Right-click menu shared by every card in Rack view.
+    private func cardMenu(for device: PlannedDevice) -> AnyView {
+        AnyView(Group {
+            Button("Show in Inspector", systemImage: "sidebar.right") { selectedDeviceID = device.id }
+            Button("Duplicate", systemImage: "plus.square.on.square") {
+                if let copy = project.duplicateDevice(device.id) { selectedDeviceID = copy }
+            }
+            Divider()
+            Button("Delete…", systemImage: "trash", role: .destructive) { pendingDelete = device }
+        })
+    }
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
@@ -206,6 +230,22 @@ struct RackLayoutView: View {
             .padding(20)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .confirmationDialog(
+            "Delete \(pendingDelete?.name ?? "device")?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let device = pendingDelete {
+                    project.removeDevice(device.id)
+                    if selectedDeviceID == device.id { selectedDeviceID = nil }
+                }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("This also removes connections that use it. This can't be undone.")
+        }
     }
 
     private func rackColumn(_ rack: EquipmentRack) -> some View {
@@ -220,7 +260,9 @@ struct RackLayoutView: View {
             }
             .padding(.horizontal, 4)
 
+            VStack(spacing: 0) {
             ForEach(0..<rack.shelfCount, id: \.self) { shelf in
+                ShelfGapView { tokens in handleInsert(tokens, rackID: rack.id, gap: shelf) }
                 let devices = project.devices.filter { $0.rackID == rack.id && $0.shelfIndex == shelf }
                 ShelfSlotView(
                     shelf: shelf,
@@ -228,8 +270,11 @@ struct RackLayoutView: View {
                     selectedDeviceID: selectedDeviceID,
                     connectionSummary: connectionSummary,
                     select: { selectedDeviceID = $0 },
+                    menu: cardMenu,
                     handleDrop: { tokens in handleDrop(tokens, rackID: rack.id, shelf: shelf) }
                 )
+            }
+            ShelfGapView { tokens in handleInsert(tokens, rackID: rack.id, gap: rack.shelfCount) }
             }
         }
         .padding(12)
@@ -251,6 +296,7 @@ struct RackLayoutView: View {
                 )
                     .onTapGesture { selectedDeviceID = device.id }
                     .draggable("device:\(device.id.uuidString)")
+                    .contextMenu { cardMenu(for: device) }
             }
 
             if project.devices.allSatisfy({ $0.rackID != nil && $0.shelfIndex != nil }) {
@@ -285,11 +331,30 @@ struct RackLayoutView: View {
             return true
         }
         if token.hasPrefix("device:"),
-           let id = UUID(uuidString: String(token.dropFirst("device:".count))),
-           let index = project.devices.firstIndex(where: { $0.id == id }) {
-            guard canPlace(project.devices[index], on: rackID, shelf: shelf, excluding: id) else { return false }
-            project.devices[index].rackID = rackID
-            project.devices[index].shelfIndex = shelf
+           let id = UUID(uuidString: String(token.dropFirst("device:".count))) {
+            guard project.moveDevice(id, toRack: rackID, shelf: shelf) else { return false }
+            selectedDeviceID = id
+            return true
+        }
+        return false
+    }
+
+    /// A drop in the gap between two shelves: insert there and slide neighbours over.
+    private func handleInsert(_ tokens: [String], rackID: UUID, gap: Int) -> Bool {
+        guard let token = tokens.first else { return false }
+        if token.hasPrefix("template:"),
+           let template = DeviceCatalog.template(id: String(token.dropFirst("template:".count))) {
+            let device = template.instantiate()
+            var trial = project
+            trial.devices.append(device)
+            guard trial.insertDevice(device.id, toRack: rackID, before: gap) else { return false }
+            project = trial
+            selectedDeviceID = device.id
+            return true
+        }
+        if token.hasPrefix("device:"),
+           let id = UUID(uuidString: String(token.dropFirst("device:".count))) {
+            guard project.insertDevice(id, toRack: rackID, before: gap) else { return false }
             selectedDeviceID = id
             return true
         }
@@ -315,12 +380,32 @@ struct RackLayoutView: View {
     }
 }
 
+/// A thin drop target between two shelves. Dropping here inserts instead of swapping.
+struct ShelfGapView: View {
+    let handleDrop: ([String]) -> Bool
+    @State private var targeted = false
+
+    var body: some View {
+        Color.clear
+            .frame(height: 12)
+            .overlay {
+                if targeted {
+                    Capsule().fill(Color.accentColor).frame(height: 4)
+                }
+            }
+            .contentShape(Rectangle())
+            .dropDestination(for: String.self) { tokens, _ in handleDrop(tokens) } isTargeted: { targeted = $0 }
+            .accessibilityHidden(true)
+    }
+}
+
 struct ShelfSlotView: View {
     let shelf: Int
     let devices: [PlannedDevice]
     let selectedDeviceID: UUID?
     let connectionSummary: (PlannedDevice) -> String?
     let select: (UUID) -> Void
+    let menu: (PlannedDevice) -> AnyView
     let handleDrop: ([String]) -> Bool
 
     var body: some View {
@@ -339,6 +424,7 @@ struct ShelfSlotView: View {
                         )
                         .onTapGesture { select(device.id) }
                         .draggable("device:\(device.id.uuidString)")
+                        .contextMenu { menu(device) }
                     }
                 }
             } else {
@@ -369,7 +455,8 @@ struct DeviceCardView: View {
                 Text(device.name).font(.subheadline.weight(.medium)).lineLimit(1)
                 Text(connectionSummary ?? secondaryText)
                     .font(.caption).foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             if device.requiresUPS { Image(systemName: "bolt.shield").foregroundStyle(.green) }
@@ -379,13 +466,15 @@ struct DeviceCardView: View {
         .overlay(RoundedRectangle(cornerRadius: 7).stroke(selected ? Color.accentColor : .clear, lineWidth: 1.5))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(device.name), \(device.ports.count) ports")
+        .accessibilityLabel("\(device.name), \(device.portSummary.isEmpty ? "no data ports" : device.portSummary)")
     }
 
     private var secondaryText: String {
         let identity = [device.modelLine, device.modelIdentifier].filter { !$0.isEmpty }.joined(separator: " · ")
-        if !identity.isEmpty { return "\(identity) · \(device.shelfUsage == .sharedAccessory ? "shared" : "dedicated")" }
-        return "\(device.ports.count) ports · \(device.shelfUsage == .sharedAccessory ? "shared" : "dedicated")"
+        let shared = device.shelfUsage == .sharedAccessory ? " · shared" : ""
+        if !identity.isEmpty { return identity + shared }
+        let ports = device.portSummary.isEmpty ? "no data ports" : device.portSummary
+        return ports + shared
     }
 }
 
@@ -598,7 +687,7 @@ struct DeviceInspectorView: View {
 
             Section("Placement") {
                 Picker("Shelf use", selection: $device.shelfUsage) {
-                    ForEach(ShelfUsage.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(ShelfUsage.allCases) { Text($0.label).tag($0) }
                 }
                 .onChange(of: device.shelfUsage) { _, newValue in
                     guard newValue == .dedicated, let rackID = device.rackID, let shelf = device.shelfIndex else { return }

@@ -73,10 +73,10 @@ Sharing/VNC, SSH, or no action. Valid entries appear as clickable links in the
 inspector. Existing complete URLs are preserved; otherwise the selected scheme
 is added to the entered hostname or address.
 
-Initial presets include Mac mini, Raspberry Pi, JetKVM, external SSD,
+Initial presets include Mac mini, Raspberry Pi, Generic KVM (rename it to the model you use, for example JetKVM), external SSD,
 Thunderbolt dock, 10 Gb Thunderbolt adapter, 2.5 Gb USB adapter, Time Machine
 drive, five-port 1 Gb switch, four-port 2.5 Gb switch with two 10 Gb uplinks,
-NAS, printer, IoT sensor hub, solar hub, WAN router, UPS, and generic devices.
+NAS, printer, IoT sensor hub, solar hub, WAN router, UPS, and a generic block in every category for equipment with no named preset.
 
 ### Network calculation
 

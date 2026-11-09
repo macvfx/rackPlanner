@@ -15,7 +15,7 @@
 - [ ] A preset can be added from the library.
 - [ ] A preset can be dragged to an empty shelf.
 - [ ] A device can be moved between shelves and to Unassigned.
-- [ ] A shared JetKVM can be placed on a shelf occupied by a dedicated Mac.
+- [ ] A shared KVM can be placed on a shelf occupied by a dedicated Mac.
 - [ ] A second dedicated device is rejected from that occupied shelf.
 - [ ] HDMI and USB connections can target compatible ports on the same host.
 - [ ] Selecting the host lists its attached accessories.

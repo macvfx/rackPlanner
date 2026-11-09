@@ -44,6 +44,15 @@ enum ShelfUsage: String, Codable, CaseIterable, Identifiable {
     case sharedAccessory = "Shares a shelf"
 
     var id: String { rawValue }
+
+    /// What the app shows. The raw values stay as they are because they are saved in plan
+    /// files and exported to CSV.
+    var label: String {
+        switch self {
+        case .dedicated: "Primary — owns its shelf"
+        case .sharedAccessory: "Shared — rides on a primary device's shelf"
+        }
+    }
 }
 
 enum AddressKind: String, Codable, CaseIterable, Identifiable {
@@ -62,6 +71,8 @@ enum RemoteAccessMethod: String, Codable, CaseIterable, Identifiable {
     case ssh = "SSH"
 
     var id: String { rawValue }
+
+    static let allowedSchemes: Set<String> = ["http", "https", "vnc", "ssh"]
 
     var scheme: String? {
         switch self {
@@ -94,7 +105,13 @@ enum RemoteAccessMethod: String, Codable, CaseIterable, Identifiable {
     func url(for rawValue: String) -> URL? {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
-        if let existing = URL(string: value), existing.scheme != nil { return existing }
+        // Only open schemes Rack Planner offers. A plan file from someone else must not
+        // be able to launch file:, smb:, or another app's custom scheme from a link.
+        if value.contains("://") {
+            guard let existing = URL(string: value), let found = existing.scheme?.lowercased(),
+                  Self.allowedSchemes.contains(found) else { return nil }
+            return existing
+        }
         guard let scheme else { return nil }
         let colonCount = value.filter { $0 == ":" }.count
         let destination = colonCount > 1 && !value.hasPrefix("[") ? "[\(value)]" : value
@@ -233,6 +250,31 @@ struct PlannedDevice: Codable, Identifiable, Hashable {
     var upsOutletCount = 0
     var notes = ""
 
+    /// Counts of data ports by kind. Power inlets (AC or a USB-C port marked as power) and
+    /// Wi-Fi radios are not ports a cable plugs a device into for data, so they are left out.
+    var portCounts: (network: Int, usb: Int, thunderbolt: Int, hdmi: Int, storage: Int) {
+        let data = ports.filter { $0.role != .power && $0.kind != .acPower }
+        return (
+            network: data.filter { $0.kind == .ethernet || $0.kind == .sfp || $0.kind == .wan }.count,
+            usb: data.filter { $0.kind == .usbA || $0.kind == .usbC }.count,
+            thunderbolt: data.filter { $0.kind == .thunderbolt }.count,
+            hdmi: data.filter { $0.kind == .hdmi }.count,
+            storage: data.filter { $0.kind == .storage }.count
+        )
+    }
+
+    /// For example "5 network · 2 Thunderbolt · 1 HDMI"; empty when there are no data ports.
+    var portSummary: String {
+        let counts = portCounts
+        return [
+            counts.network > 0 ? "\(counts.network) network" : nil,
+            counts.usb > 0 ? "\(counts.usb) USB" : nil,
+            counts.thunderbolt > 0 ? "\(counts.thunderbolt) Thunderbolt" : nil,
+            counts.hdmi > 0 ? "\(counts.hdmi) HDMI" : nil,
+            counts.storage > 0 ? "\(counts.storage) storage" : nil
+        ].compactMap { $0 }.joined(separator: " · ")
+    }
+
     var providesNetworkCapacity: Bool { ports.contains { $0.role.providesCapacity } }
 
     init(
@@ -317,11 +359,65 @@ struct PlannerSettings: Codable, Hashable {
 }
 
 struct RackPlanProject: Codable, Hashable {
-    var schemaVersion = 3
+    static let currentSchemaVersion = 3
+
+    var schemaVersion = RackPlanProject.currentSchemaVersion
     var name: String
     var racks: [EquipmentRack]
     var devices: [PlannedDevice]
     var settings = PlannerSettings()
+
+    init(name: String, racks: [EquipmentRack], devices: [PlannedDevice], settings: PlannerSettings = PlannerSettings()) {
+        self.name = name
+        self.racks = racks
+        self.devices = devices
+        self.settings = settings
+    }
+
+    private enum CodingKeys: String, CodingKey { case schemaVersion, name, racks, devices, settings }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let version = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        // A newer file may hold data this version would silently drop when it saves.
+        guard version <= Self.currentSchemaVersion else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "This plan was saved by a newer version of Rack Planner (schema \(version))."
+            ))
+        }
+        name = try values.decodeIfPresent(String.self, forKey: .name) ?? "Untitled Rack Plan"
+        racks = try values.decodeIfPresent([EquipmentRack].self, forKey: .racks) ?? []
+        devices = try values.decodeIfPresent([PlannedDevice].self, forKey: .devices) ?? []
+        settings = try values.decodeIfPresent(PlannerSettings.self, forKey: .settings) ?? PlannerSettings()
+        schemaVersion = Self.currentSchemaVersion
+        pruneDanglingReferences()
+    }
+
+    /// Drops host connections whose ports or devices no longer exist, and clears
+    /// rack placement that points at a removed rack.
+    mutating func pruneDanglingReferences() {
+        let rackIDs = Set(racks.map(\.id))
+        let deviceByID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for index in devices.indices {
+            if let rack = devices[index].rackID, !rackIDs.contains(rack) {
+                devices[index].rackID = nil
+                devices[index].shelfIndex = nil
+            }
+            let localPorts = Set(devices[index].ports.map(\.id))
+            devices[index].hostConnections.removeAll { connection in
+                // Keep half-filled rows the user is still editing; drop any row that
+                // names a port or device that no longer exists.
+                if let local = connection.localPortID, !localPorts.contains(local) { return true }
+                if let host = connection.hostDeviceID {
+                    guard let hostDevice = deviceByID[host] else { return true }
+                    if let hostPort = connection.hostPortID,
+                       !hostDevice.ports.contains(where: { $0.id == hostPort }) { return true }
+                }
+                return false
+            }
+        }
+    }
 
     static var blank: RackPlanProject {
         RackPlanProject(

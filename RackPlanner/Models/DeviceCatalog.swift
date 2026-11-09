@@ -66,13 +66,13 @@ enum DeviceCatalog {
             .network("Ethernet", purpose: .lan, speeds: [.mb100, .gb1]),
             .peripheral("USB", kind: .usbA),
             .peripheral("HDMI", kind: .hdmi),
-            .peripheral("USB-C Power", kind: .usbC)
+            DevicePort(name: "USB-C Power", kind: .usbC, role: .power)
         ], estimatedWatts: 15, upsOutletCount: 0),
-        DeviceTemplate(id: "jetkvm", name: "JetKVM", category: .kvm, ports: [
+        DeviceTemplate(id: "generic-kvm", name: "Generic KVM", category: .kvm, ports: [
             .network("LAN", purpose: .lan, speeds: [.mb100, .gb1]),
             .peripheral("HDMI Input", kind: .hdmi),
             .peripheral("USB Control", kind: .usbC),
-            .peripheral("Power", kind: .usbC)
+            DevicePort(name: "Power", kind: .usbC, role: .power)
         ], estimatedWatts: 5, upsOutletCount: 0),
         DeviceTemplate(id: "ssd", name: "External SSD", category: .storage, ports: [
             .peripheral("USB-C", kind: .usbC)
@@ -138,7 +138,28 @@ enum DeviceCatalog {
         ], estimatedWatts: nil, upsOutletCount: 0),
         DeviceTemplate(id: "generic-switch", name: "Generic Switch", category: .networking, ports:
             (1...8).map { .network("Port \($0)", role: .switchAccess, purpose: .lan, speeds: [.mb100, .gb1]) } +
-            [.peripheral("AC", kind: .acPower)], estimatedWatts: nil, upsOutletCount: 0)
+            [.peripheral("AC", kind: .acPower)], estimatedWatts: nil, upsOutletCount: 0),
+        // Generic blocks: one per category, for equipment with no named preset.
+        // Rename the device and edit its ports, speeds, and notes after adding it.
+        DeviceTemplate(id: "generic-network-device", name: "Generic Network Device", category: .networking, ports: [
+            .network("Ethernet", purpose: .lan, speeds: [.mb100, .gb1]),
+            .peripheral("AC", kind: .acPower)
+        ], estimatedWatts: nil, upsOutletCount: 0),
+        DeviceTemplate(id: "generic-storage", name: "Generic Storage", category: .storage, ports: [
+            .peripheral("USB-C", kind: .usbC), .peripheral("AC", kind: .acPower)
+        ], estimatedWatts: nil, upsOutletCount: 0),
+        DeviceTemplate(id: "generic-adapter", name: "Generic Adapter / Dock", category: .adapter, ports: [
+            .peripheral("Host", kind: .usbC), .peripheral("Port", kind: .usbA)
+        ], estimatedWatts: nil, upsOutletCount: 0),
+        DeviceTemplate(id: "generic-iot", name: "Generic IoT Device", category: .iot, ports: [
+            .network("LAN", purpose: .lan, speeds: [.mb100, .gb1]), .peripheral("Power", kind: .acPower)
+        ], estimatedWatts: nil, upsOutletCount: 0),
+        DeviceTemplate(id: "generic-power", name: "Generic Power Device", category: .power, ports: [
+            .peripheral("AC Input", kind: .acPower)
+        ], estimatedWatts: nil, upsOutletCount: 0),
+        DeviceTemplate(id: "generic-peripheral", name: "Generic Peripheral", category: .peripheral, ports: [
+            .peripheral("USB", kind: .usbA), .peripheral("AC", kind: .acPower)
+        ], estimatedWatts: nil, upsOutletCount: 0)
     ]
 
     static func template(id: String) -> DeviceTemplate? { templates.first { $0.id == id } }
@@ -168,7 +189,8 @@ enum DeviceCatalog {
         }
 
         if let firstMac = devices.first {
-            var kvm = template(id: "jetkvm")!.instantiate(named: "JetKVM for Mac mini 1")
+            var kvm = template(id: "generic-kvm")!.instantiate(named: "JetKVM for Mac mini 1")
+            kvm.modelLine = "JetKVM"
             kvm.hostname = "jetkvm-1.example.invalid"
             kvm.hostnameAccessMethod = .https
             kvm.networkAddresses = [

@@ -12,15 +12,23 @@ struct NetworkPlanResult: Identifiable, Equatable {
     let shortage: Int
     let fastestEndpoint: EthernetSpeed?
     let fastestProvider: EthernetSpeed?
+    /// Ports missing at the most constrained speed tier (0 when speeds are fine).
+    var speedShortage = 0
+    /// The endpoint speed whose tier has the largest shortfall.
+    var limitingSpeed: EthernetSpeed?
 
     var isAdequate: Bool {
-        shortage == 0 && (fastestEndpoint == nil || (fastestProvider ?? .mb100) >= fastestEndpoint!)
+        shortage == 0 && speedShortage == 0 &&
+            (fastestEndpoint == nil || (fastestProvider ?? .mb100) >= fastestEndpoint!)
     }
 
     var recommendation: String {
         if endpointDemand == 0 { return "No wired endpoints assigned." }
         if let endpoint = fastestEndpoint, let provider = fastestProvider, provider < endpoint {
             return "Add ports capable of at least \(endpoint.label); current providers top out at \(provider.label)."
+        }
+        if speedShortage > 0, let tier = limitingSpeed, speedShortage >= shortage {
+            return "Add at least \(speedShortage) usable port\(speedShortage == 1 ? "" : "s") of \(tier.label) or faster after uplinks."
         }
         if shortage > 0 {
             let speed = fastestEndpoint?.label ?? "the required speed"
@@ -70,6 +78,24 @@ enum PlanningEngine {
         let spareMultiplier = 1 + Double(project.settings.sparePortPercentage) / 100
         let target = Int(ceil(Double(endpoints.count) * spareMultiplier))
 
+        // Speed tiers: endpoints needing at least speed S can only use ports that reach S.
+        // Uplinks are assumed to consume the slowest ports first.
+        var speedShortage = 0
+        var limitingSpeed: EthernetSpeed?
+        let endpointSpeeds = endpoints.map { $0.selectedSpeed ?? $0.maximumSpeed ?? .mb100 }
+        for tier in Set(endpointSpeeds) {
+            let demand = endpointSpeeds.filter { $0 >= tier }.count
+            let target = Int(ceil(Double(demand) * spareMultiplier))
+            let capable = capacityPorts.filter { ($0.maximumSpeed ?? .mb100) >= tier }.count
+            let slowerPorts = capacityPorts.count - capable
+            let usableCapable = max(0, capable - max(0, reserved - slowerPorts))
+            let gap = max(0, target - usableCapable)
+            if gap > speedShortage || (gap == speedShortage && gap > 0 && tier > (limitingSpeed ?? .mb100)) {
+                speedShortage = gap
+                limitingSpeed = tier
+            }
+        }
+
         return NetworkPlanResult(
             network: network,
             endpointDemand: endpoints.count,
@@ -78,9 +104,11 @@ enum PlanningEngine {
             reservedUplinkPorts: reserved,
             usableCapacity: usable,
             targetCapacity: target,
-            shortage: max(0, target - usable),
+            shortage: max(max(0, target - usable), speedShortage),
             fastestEndpoint: endpoints.compactMap { $0.selectedSpeed ?? $0.maximumSpeed }.max(),
-            fastestProvider: capacityPorts.compactMap(\.maximumSpeed).max()
+            fastestProvider: capacityPorts.compactMap(\.maximumSpeed).max(),
+            speedShortage: speedShortage,
+            limitingSpeed: limitingSpeed
         )
     }
 

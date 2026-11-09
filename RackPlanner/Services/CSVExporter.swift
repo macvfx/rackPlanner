@@ -101,7 +101,17 @@ enum CSVExporter {
             "\(result.protectedDevices),\(result.upsOutlets),\(result.outletShortage),\(result.plannedWatts)\n"
     }
 
-    private static func csv(_ value: String) -> String {
-        "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+    static let fileNames = [
+        "devices.csv", "ports.csv", "connections.csv", "access.csv", "network-requirements.csv", "power.csv"
+    ]
+
+    /// Quotes a cell. A leading `=`, `+`, `-`, `@`, tab or return would be run as a formula by
+    /// Excel and Numbers, so such text gets a leading apostrophe.
+    static func csv(_ value: String) -> String {
+        var text = value
+        if let first = text.unicodeScalars.first, "=+-@\t\r".unicodeScalars.contains(first) {
+            text = "'" + text
+        }
+        return "\"\(text.replacingOccurrences(of: "\"", with: "\"\""))\""
     }
 }
